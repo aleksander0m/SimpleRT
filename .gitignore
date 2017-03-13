@@ -1,0 +1,4 @@
+*.o
+*~
+
+/simple-rt-cli/g-simple-rt

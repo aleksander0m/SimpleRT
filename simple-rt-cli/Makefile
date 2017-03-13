@@ -14,46 +14,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-TARGET = simple-rt
+TARGET = g-simple-rt
 LDFLAGS = -lm -lpthread
 CC = gcc
-CFLAGS = -g -std=c99 -D_DEFAULT_SOURCE -Wall -Iinclude
+CFLAGS = -g -std=c99 -D_DEFAULT_SOURCE -Wall
 
-CFLAGS += `pkg-config --cflags libusb-1.0`
-LDFLAGS += `pkg-config --libs libusb-1.0`
+CFLAGS += `pkg-config --cflags libusb-1.0 glib-2.0 gudev-1.0`
+LDFLAGS += `pkg-config --libs libusb-1.0 glib-2.0 gudev-1.0`
 
 .PHONY: default all clean
 
 default: $(TARGET)
 all: default
 
-PLATFORM := none
-UNAME := $(shell uname -s)
-ifeq ($(UNAME),Linux)
-PLATFORM = linux
-endif
-ifeq ($(UNAME),Darwin)
-PLATFORM = osx
-endif
-ifeq ($(PLATFORM),none)
-$(error unknown platform $(UNAME))
-endif
+CSRC = g-simple-rt.c
+COBJ = $(CSRC:.c=.o)
 
-OBJ = obj
-SOURCES = src
-PLATFORM_SRC = $(SOURCES)/$(PLATFORM)
-OBJECTS += $(patsubst %.c, $(OBJ)/%.o, $(wildcard $(SOURCES)/*.c $(PLATFORM_SRC)/*.c))
-HEADERS = $(wildcard include/*.h)
-
-$(OBJ)/%.o: %.c $(HEADERS)
-	@mkdir -p `dirname $@`
+$(COBJ): $(CSRC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PRECIOUS: $(TARGET) $(OBJECTS)
-
-$(TARGET): $(OBJECTS)
-	$(CC) $(OBJECTS) -Wall $(LDFLAGS) -o $@
+$(TARGET): $(COBJ)
+	$(CC) $(COBJ) -Wall $(LDFLAGS) -o $@
 
 clean:
-	-rm -rf $(OBJ)
+	-rm -f $(COBJ)
 	-rm -f $(TARGET)

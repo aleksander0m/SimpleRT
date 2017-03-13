@@ -2,7 +2,7 @@
 
 <resources>
     <usb-accessory
-        manufacturer="Konstantin Menyaev"
-        model="SimpleRT"
+        manufacturer="The SimpleRT developers"
+        model="gSimpleRT"
         version="1.0"/>
 </resources>

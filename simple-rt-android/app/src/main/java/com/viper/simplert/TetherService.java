@@ -1,6 +1,7 @@
 /*
  * SimpleRT: Reverse tethering utility for Android
- * Copyright (C) 2016 Konstantin Menyaev
+ * Copyright (C) 2016-2017 Konstantin Menyaev
+ * Copyright (C) 2017 Aleksander Morgado <aleksander@aleksander.es>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +79,8 @@ public class TetherService extends VpnService {
         Builder builder = new Builder();
         builder.setMtu(1500);
         builder.setSession(getString(R.string.app_name));
-        builder.addAddress("10.10.10.2", 30);
+        // Use the serial field to receive the IP address to use :)
+        builder.addAddress(accessory.getSerial(), 30);
         builder.addRoute("0.0.0.0", 0);
         builder.addDnsServer("8.8.8.8");
 
@@ -96,7 +98,7 @@ public class TetherService extends VpnService {
             return START_NOT_STICKY;
         }
 
-        Toast.makeText(this, "SimpleRT Connected!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "SimpleRT Connected! (" + accessory.getSerial() + ")", Toast.LENGTH_SHORT).show();
         Native.start(tunFd.detachFd(), accessoryFd.detachFd());
 
         return START_NOT_STICKY;
