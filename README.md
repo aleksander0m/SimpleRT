@@ -46,8 +46,6 @@ I skipped any Mac OS X support here, not personally interested in that.
 Example run:
 ```
 $ sudo ./g-simple-rt --vid=04e8 --interface=eth0
-[003,006] checking AOA support...
-error: AOA probing failed: Overflow
 [004,120] checking AOA support...
 [004,120] device supports AOA 2
 device: 0x04e8:0x6865 [004:080]: tracked (candidate)
