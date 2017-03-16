@@ -1,0 +1,7 @@
+Format: http://dep.debian.net/deps/dep5
+Upstream-Name: g-simple-rt
+Source: https://github.com/aleksander0m/SimpleRT
+
+Files: *
+Copyright: 2017 Aleksander Morgado
+License: GNU GPL v3

@@ -1,0 +1,10 @@
+
+#
+# Tethering options
+#   -v, --vid=[VID]             Device USB vendor ID (mandatory)
+#   -p, --pid=[PID]             Device USB product ID (optional)
+#   -i, --interface=[IFACE]     Network interface (mandatory)
+#
+
+DAEMON_ARGS="--vid=04e8 --interface=localhost"
+

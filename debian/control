@@ -1,0 +1,20 @@
+Source: g-simple-rt
+Priority: extra
+Maintainer: Aleksander Morgado <aleksander@aleksander.es>
+Build-Depends: debhelper (>= 8.0.0),
+               autotools-dev,
+               pkg-config,
+               gnome-common,
+               libglib2.0-dev (>= 2.36),
+               libgudev-1.0-dev (>= 147),
+               libusb-dev
+Standards-Version: 3.9.2
+Section: utils
+Homepage: https://github.com/aleksander0m/SimpleRT
+
+Package: g-simple-rt
+Section: utils
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: simple rt
+ Simple reverse tethering for Android (GNU/Linux client side)
