@@ -1,4 +1,23 @@
 *.o
 *~
 
+.libs
+.deps
+Makefile.in
+Makefile
+
+/aclocal.m4
+/stamp-h1
+/missing
+/INSTALL
+/autom4te.cache
+/compile
+/config.*
+/configure
+/depcomp
+/install-sh
+/libtool
+/ltmain.sh
+/m4
+
 /simple-rt-cli/g-simple-rt

@@ -29,6 +29,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <config.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -51,9 +53,6 @@
 #include <glib-unix.h>
 
 #include <gudev/gudev.h>
-
-#define PROGRAM_NAME    "g-simple-rt"
-#define PROGRAM_VERSION "1.0"
 
 /* Android Open Accessory protocol defines */
 #define AOA_GET_PROTOCOL            51
@@ -326,7 +325,7 @@ conn_thread_func (Device *device)
     network      = g_strdup_printf ("10.11.%u.0", device->subnet);
     host_address = g_strdup_printf ("10.11.%u.1", device->subnet);
 
-    cmd = g_strdup_printf ("./iface_up.sh linux %s %s %s 30 %s\n",
+    cmd = g_strdup_printf ("g-simple-rt-iface-up.sh linux %s %s %s 30 %s\n",
                            device->tun_name,
                            device->context->interface,
                            network,
@@ -898,7 +897,7 @@ static void
 print_version_and_exit (void)
 {
     g_print ("\n"
-             PROGRAM_NAME " " PROGRAM_VERSION "\n"
+             PACKAGE_NAME " " PACKAGE_VERSION "\n"
              "Copyright (C) 2016-2017 Konstantin Menyaev\n"
              "Copyright (C) 2017 Zodiac Inflight Innovations\n"
              "Copyright (C) 2017 Aleksander Morgado\n"
