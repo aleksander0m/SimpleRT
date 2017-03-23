@@ -54,6 +54,12 @@
 
 #include <gudev/gudev.h>
 
+#if !defined BINDIR_PATH
+# error BINDIR_PATH not defined
+#endif
+
+#define IFACE_UP_SCRIPT "g-simple-rt-iface-up.sh"
+
 /* Android Open Accessory protocol defines */
 #define AOA_GET_PROTOCOL            51
 #define AOA_SEND_IDENT              52
@@ -296,12 +302,16 @@ acc_thread_func (Device *device)
 static void *
 conn_thread_func (Device *device)
 {
+#define MAX_ARGS 10
+    gchar              *args[MAX_ARGS];
+    guint               iarg = 0;
     static const gchar *clonedev = "/dev/net/tun";
     struct ifreq        ifr;
     gchar              *cmd = NULL;
     gchar              *network;
     gchar              *host_address;
     gint                ret;
+    GError             *error = NULL;
 
     device->timeout_id = 0;
 
@@ -325,13 +335,35 @@ conn_thread_func (Device *device)
     network      = g_strdup_printf ("10.11.%u.0", device->subnet);
     host_address = g_strdup_printf ("10.11.%u.1", device->subnet);
 
-    cmd = g_strdup_printf ("g-simple-rt-iface-up.sh linux %s %s %s 30 %s\n",
-                           device->tun_name,
-                           device->context->interface,
-                           network,
-                           host_address);
-    if (system (cmd) != 0) {
-        fprintf(stderr, "error: unable set iface %s up\n", device->tun_name);
+    args[iarg++] = BINDIR_PATH "/" IFACE_UP_SCRIPT;
+    args[iarg++] = "linux";
+    args[iarg++] = device->tun_name;
+    args[iarg++] = device->context->interface;
+    args[iarg++] = network;
+    args[iarg++] = "30";
+    args[iarg++] = host_address;
+    args[iarg++] = NULL;
+
+    g_assert (iarg <= MAX_ARGS);
+
+    if (!g_spawn_sync (NULL, /* working_directory */
+                       args,
+                       NULL, /* envp */
+                       G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                       NULL, /* child_setup */
+                       NULL, /* user_data */
+                       NULL, /* standard_output */
+                       NULL, /* standard_error */
+                       &ret,
+                       &error)) {
+        g_printerr ("error: couldn't run " IFACE_UP_SCRIPT " for %s: %s\n", device->tun_name, error->message);
+        g_clear_error (&error);
+        goto out;
+    }
+
+    if (!g_spawn_check_exit_status (ret, &error)) {
+        g_printerr ("error: " IFACE_UP_SCRIPT " returned error for %s: %s\n", device->tun_name, error->message);
+        g_clear_error (&error);
         goto out;
     }
 
@@ -566,7 +598,7 @@ find_usb_device (libusb_context *usb_context,
     libusb_free_device_list (devices, 1);
 
     if (!found_device)
-        g_printerr ("error: libusb device not found\n");
+        g_printerr ("error: libusb device (%03u:%03u) not found\n", busnum, devnum);
 
     return found_device;
 }

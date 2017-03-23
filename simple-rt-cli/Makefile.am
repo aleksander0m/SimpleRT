@@ -9,6 +9,7 @@ g_simple_rt_CPPFLAGS = \
 	$(GLIB_CFLAGS) \
 	$(GUDEV_CFLAGS) \
 	$(LIBUSB_CFLAGS) \
+	-DBINDIR_PATH=\""$(bindir)"\" \
 	$(NULL)
 
 g_simple_rt_SOURCES = \
