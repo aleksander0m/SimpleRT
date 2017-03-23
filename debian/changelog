@@ -1,3 +1,9 @@
+g-simple-rt (0.0.2-1) trusty; urgency=low
+
+  * New release.
+
+ -- Aleksander Morgado <aleksander@aleksander.es>  Thu, 23 Mar 2017 13:30:12 +0100
+
 g-simple-rt (0.0.1-1) trusty; urgency=low
 
   * Initial release.
