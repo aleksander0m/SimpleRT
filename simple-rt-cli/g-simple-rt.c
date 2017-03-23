@@ -46,6 +46,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <errno.h>
+#include <syslog.h>
 
 #include <libusb.h>
 
@@ -174,9 +175,9 @@ select_subnet (Context     *context,
     if (!val) {
         val = context->next_subnet++;
         if (val == 0)
-            g_printerr ("error: too many subnets!\n");
+            g_critical ("error: too many subnets!");
         else {
-            g_print ("subnet mapping added: %s --> 10.11.%u.0\n", sysfs_path, val);
+            g_message ("subnet mapping added: %s --> 10.11.%u.0", sysfs_path, val);
             g_hash_table_insert (context->subnets, g_strdup (sysfs_path), GUINT_TO_POINTER (val));
         }
     }
@@ -219,7 +220,7 @@ tun_thread_func (Device *device)
         if ((status = select (device->tun_fd + 1, &rfds, NULL, NULL, &tv)) < 0) {
             if (errno == EINTR)
                 continue;
-            g_printerr ("error: waiting to write: %s", g_strerror (errno));
+            g_warning ("waiting to write: %s", g_strerror (errno));
             break;
         }
 
@@ -236,14 +237,14 @@ tun_thread_func (Device *device)
                                              ACC_TIMEOUT)) < 0) {
                 if (ret == LIBUSB_ERROR_TIMEOUT)
                     continue;
-                g_printerr ("error: bulk transfer failed: %s\n", libusb_strerror (ret));
+                g_warning ("bulk transfer failed: %s", libusb_strerror (ret));
                 break;
             }
             continue;
         }
 
         if (nread < 0) {
-            g_printerr ("error: couldn't read from TUN device: %s\n", g_strerror (errno));
+            g_warning ("couldn't read from TUN device: %s", g_strerror (errno));
             break;
         }
 
@@ -283,12 +284,12 @@ acc_thread_func (Device *device)
             if (ret == LIBUSB_ERROR_TIMEOUT)
                 continue;
 
-            g_printerr ("error: bulk transfer error: %s\n", libusb_strerror (ret));
+            g_warning ("bulk transfer error: %s", libusb_strerror (ret));
             break;
         }
 
         if (write (device->tun_fd, acc_buf, transferred) < 0) {
-            g_printerr ("error: couldn't write to TUN device: %s\n", g_strerror (errno));
+            g_warning ("couldn't write to TUN device: %s", g_strerror (errno));
             break;
         }
     }
@@ -316,7 +317,7 @@ conn_thread_func (Device *device)
     device->timeout_id = 0;
 
     if ((device->tun_fd = open (clonedev, O_RDWR)) < 0 ) {
-        g_printerr ("error: couldn't open TUN clone device: %s", g_strerror (errno));
+        g_critical ("couldn't open TUN clone device: %s", g_strerror (errno));
         goto out;
     }
 
@@ -326,7 +327,7 @@ conn_thread_func (Device *device)
     if (ioctl (device->tun_fd, TUNSETIFF, (void *) &ifr) < 0) {
         close (device->tun_fd);
         device->tun_fd = 0;
-        g_printerr ("error: couldn't create TUN device: %s", g_strerror (errno));
+        g_critical ("couldn't create TUN device: %s", g_strerror (errno));
         goto out;
     }
 
@@ -356,26 +357,26 @@ conn_thread_func (Device *device)
                        NULL, /* standard_error */
                        &ret,
                        &error)) {
-        g_printerr ("error: couldn't run " IFACE_UP_SCRIPT " for %s: %s\n", device->tun_name, error->message);
+        g_critical ("couldn't run " IFACE_UP_SCRIPT " for %s: %s", device->tun_name, error->message);
         g_clear_error (&error);
         goto out;
     }
 
     if (!g_spawn_check_exit_status (ret, &error)) {
-        g_printerr ("error: " IFACE_UP_SCRIPT " returned error for %s: %s\n", device->tun_name, error->message);
+        g_critical (IFACE_UP_SCRIPT " returned error for %s: %s", device->tun_name, error->message);
         g_clear_error (&error);
         goto out;
     }
 
     /* Trying to open supplied device */
     if ((ret = libusb_open (device->usb_device, &device->usb_handle)) < 0) {
-        g_printerr ("error: unable to open device: %s\n", libusb_strerror (ret));
+        g_critical ("unable to open device: %s", libusb_strerror (ret));
         goto out;
     }
 
     /* Claiming first (accessory) interface from the opened device */
     if ((ret = libusb_claim_interface (device->usb_handle, 0)) < 0) {
-        g_printerr ("error: couldn't claim interface: %s\n", libusb_strerror (ret));
+        g_critical ("couldn't claim interface: %s", libusb_strerror (ret));
         goto out;
     }
 
@@ -429,15 +430,15 @@ device_setup_aoa (Device *device)
 
     device->subnet = select_subnet (device->context, device->sysfs_path);
     if (device->subnet == 0) {
-        g_printerr ("[%03o,%03o] subnet allocation failed\n", device->busnum, device->devnum);
+        g_critical ("[%03o,%03o] subnet allocation failed", device->busnum, device->devnum);
         goto out;
     }
 
     device_address = g_strdup_printf ("10.11.%u.2", device->subnet);
-    g_print ("[%03o,%03o] subnet allocated: 10.11.%u.0\n",
-             device->busnum, device->devnum, device->subnet);
+    g_message ("[%03o,%03o] subnet allocated: 10.11.%u.0",
+               device->busnum, device->devnum, device->subnet);
 
-    g_print ("[%03o,%03o] sending manufacturer: %s\n", device->busnum, device->devnum, default_manufacturer);
+    g_debug ("[%03o,%03o] sending manufacturer: %s", device->busnum, device->devnum, default_manufacturer);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -448,7 +449,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] sending model: %s\n", device->busnum, device->devnum, default_model);
+    g_debug ("[%03o,%03o] sending model: %s", device->busnum, device->devnum, default_model);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -459,7 +460,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] sending description: %s\n", device->busnum, device->devnum, default_description);
+    g_debug ("[%03o,%03o] sending description: %s", device->busnum, device->devnum, default_description);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -470,7 +471,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] sending version: %s\n", device->busnum, device->devnum, default_version);
+    g_debug ("[%03o,%03o] sending version: %s", device->busnum, device->devnum, default_version);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -481,7 +482,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] sending url: %s\n", device->busnum, device->devnum, default_url);
+    g_debug ("[%03o,%03o] sending url: %s", device->busnum, device->devnum, default_url);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -492,7 +493,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] sending serial: %s\n", device->busnum, device->devnum, device_address);
+    g_debug ("[%03o,%03o] sending serial: %s", device->busnum, device->devnum, device_address);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_SEND_IDENT,
@@ -503,7 +504,7 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] switching device into accessory mode...\n", device->busnum, device->devnum);
+    g_debug ("[%03o,%03o] switching device into accessory mode...", device->busnum, device->devnum);
     if ((ret = libusb_control_transfer (device->usb_handle,
                                         LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR,
                                         AOA_START_ACCESSORY,
@@ -514,11 +515,11 @@ device_setup_aoa (Device *device)
                                         0)) < 0)
         goto out;
 
-    g_print ("[%03o,%03o] switch requested\n", device->busnum, device->devnum);
+    g_debug ("[%03o,%03o] switch requested", device->busnum, device->devnum);
 
 out:
     if (ret < 0)
-        g_printerr ("[%03o,%03o] accessory initialization failed: %s\n", device->busnum, device->devnum, libusb_strerror (ret));
+        g_warning ("[%03o,%03o] accessory initialization failed: %s", device->busnum, device->devnum, libusb_strerror (ret));
 
     g_clear_pointer (&device->usb_handle, (GDestroyNotify) libusb_close);
     g_free (device_address);
@@ -532,22 +533,22 @@ device_probe_aoa (Device *device)
     gint    ret;
     guint16 aoa_version;
 
-    g_print ("[%03o,%03o] checking AOA support...\n", device->busnum, device->devnum);
+    g_debug ("[%03o,%03o] checking AOA support...", device->busnum, device->devnum);
 
     /* Trying to open supplied device */
     if ((ret = libusb_open (device->usb_device, &device->usb_handle)) < 0) {
-        g_printerr ("error: unable to open device: %s\n", libusb_strerror (ret));
+        g_critical ("unable to open device: %s", libusb_strerror (ret));
         return FALSE;
     }
 
     /* Check whether a kernel driver is attached. If so, we'll need to detach it. */
     if (libusb_kernel_driver_active (device->usb_handle, 0)) {
-        g_print ("[%03o,%03o] detaching kernel driver...\n", device->busnum, device->devnum);
+        g_debug ("[%03o,%03o] detaching kernel driver...", device->busnum, device->devnum);
         if ((ret = libusb_detach_kernel_driver (device->usb_handle, 0)) < 0) {
-            g_printerr ("error: couldn't detach kernel driver: %s\n", libusb_strerror (ret));
+            g_critical ("[%03o,%03o] couldn't detach kernel driver: %s", device->busnum, device->devnum, libusb_strerror (ret));
             return FALSE;
         }
-        g_print ("[%03o,%03o] kernel driver detached...\n", device->busnum, device->devnum);
+        g_debug ("[%03o,%03o] kernel driver detached...", device->busnum, device->devnum);
     }
 
     /* Now ask if device supports AOA protocol */
@@ -559,12 +560,12 @@ device_probe_aoa (Device *device)
                                         (uint8_t *) &aoa_version,
                                         sizeof (aoa_version),
                                         0)) < 0) {
-        g_printerr ("error: AOA probing failed: %s\n", libusb_strerror (ret));
+        g_critical ("[%03o,%03o] AOA probing failed: %s", device->busnum, device->devnum, libusb_strerror (ret));
         return FALSE;
     }
 
     aoa_version = GUINT16_FROM_LE (aoa_version);
-    g_print ("[%03o,%03o] device supports AOA %" G_GUINT16_FORMAT "\n", device->busnum, device->devnum, aoa_version);
+    g_message ("[%03o,%03o] device supports AOA %" G_GUINT16_FORMAT, device->busnum, device->devnum, aoa_version);
 
     return TRUE;
 }
@@ -584,7 +585,7 @@ find_usb_device (libusb_context *usb_context,
 
     n_devices = libusb_get_device_list (usb_context, &devices);
     if (!n_devices || !devices) {
-        g_printerr ("error: libusb device enumeration failed\n");
+        g_critical ("libusb device enumeration failed");
         return NULL;
     }
 
@@ -598,7 +599,7 @@ find_usb_device (libusb_context *usb_context,
     libusb_free_device_list (devices, 1);
 
     if (!found_device)
-        g_printerr ("error: libusb device (%03u:%03u) not found\n", busnum, devnum);
+        g_critical ("libusb device (%03u:%03u) not found", busnum, devnum);
 
     return found_device;
 }
@@ -632,8 +633,8 @@ untrack_device (Context     *context,
         return;
 
     device = (Device *) (l->data);
-    g_print ("device: 0x%04x:0x%04x [%03u:%03u]: untracked (%s)\n",
-             device->vid, device->pid, device->busnum, device->devnum, device->aoa ? "Android Open Accessory" : "candidate");
+    g_message ("device: 0x%04x:0x%04x [%03u:%03u]: untracked (%s)",
+               device->vid, device->pid, device->busnum, device->devnum, device->aoa ? "Android Open Accessory" : "candidate");
     device_free (device);
 
     context->tracked_devices = g_list_delete_link (context->tracked_devices, l);
@@ -651,7 +652,7 @@ track_device (Context     *context,
     Device *device;
 
     if (find_device (context, sysfs_path)) {
-        fprintf (stderr, "error: device already tracked\n");
+        g_warning ("[%03u:%03u] device already tracked", busnum, devnum);
         return;
     }
 
@@ -687,8 +688,8 @@ track_device (Context     *context,
     /* track */
     context->tracked_devices = g_list_prepend (context->tracked_devices, device);
 
-    g_print ("device: 0x%04x:0x%04x [%03u:%03u]: tracked (%s)\n",
-             device->vid, device->pid, device->busnum, device->devnum, device->aoa ? "Android Open Accessory" : "candidate");
+    g_message ("device: 0x%04x:0x%04x [%03u:%03u]: tracked (%s)",
+               device->vid, device->pid, device->busnum, device->devnum, device->aoa ? "Android Open Accessory" : "candidate");
 }
 
 /******************************************************************************/
@@ -755,7 +756,7 @@ handle_uevent (GUdevClient *client,
                GUdevDevice *device,
                Context     *context)
 {
-    g_print ("uevent: %s %s\n", action, g_udev_device_get_sysfs_path (device));
+    g_debug ("uevent: %s %s", action, g_udev_device_get_sysfs_path (device));
 
     if (g_strcmp0 (action, "add") == 0) {
         device_added (context, device);
@@ -796,14 +797,14 @@ reset_device (guint busnum, guint devnum)
 	fd = open (path, O_WRONLY);
 	if (fd > -1) {
 		if (ioctl (fd, USBDEVFS_RESET, 0) < 0 && errno != ENODEV)
-			g_printerr ("failed reseting device [%03u,%03u]: %s\n", busnum, devnum, g_strerror (errno));
+			g_critical ("failed reseting device [%03u,%03u]: %s", busnum, devnum, g_strerror (errno));
 		else {
             reseted = TRUE;
-			g_print ("reset device [%03u,%03u]: done\n", busnum, devnum);
+			g_message ("reset device [%03u,%03u]: done", busnum, devnum);
         }
 		close (fd);
 	} else
-        g_printerr ("error: cannot open %s: %s\n", path, g_strerror (errno));
+        g_critical ("cannot open %s: %s", path, g_strerror (errno));
 
     g_free (path);
 
@@ -855,9 +856,9 @@ initial_list_reset (Context *context)
     }
 
     if (!n_resets)
-        g_printerr ("error: no AOA devices were reseted\n");
+        g_critical ("no AOA devices were reseted");
     else
-        g_print ("success: a total of %u AOA devices were reseted\n", n_resets);
+        g_message ("a total of %u AOA devices were reseted", n_resets);
 }
 
 /******************************************************************************/
@@ -867,6 +868,7 @@ static gchar    *vid_str;
 static gchar    *pid_str;
 static gchar    *interface_str;
 static gboolean  reset_flag;
+static gboolean  syslog_flag;
 static gboolean  version_flag;
 static gboolean  help_flag;
 
@@ -914,6 +916,10 @@ static GOptionEntry reset_entries[] = {
 };
 
 static GOptionEntry main_entries[] = {
+    { "syslog", 's', 0, G_OPTION_ARG_NONE, &syslog_flag,
+      "Write logs to syslog instead of standard output",
+      NULL
+    },
     { "version", 'V', 0, G_OPTION_ARG_NONE, &version_flag,
       "Print version",
       NULL
@@ -1023,6 +1029,78 @@ process_input_args (int argc, char **argv, Context *context)
     g_option_context_free (option_context);
 }
 
+/******************************************************************************/
+/* Logging */
+
+static void
+log_handler (const gchar    *log_domain,
+             GLogLevelFlags  level,
+             const gchar    *message,
+             gpointer        unused)
+{
+    gint         syslog_priority;
+    gboolean     out_stderr = FALSE;
+    const gchar *prefix = NULL;
+
+    switch (level) {
+    case G_LOG_LEVEL_ERROR:
+        syslog_priority = LOG_CRIT;
+        out_stderr = TRUE;
+        prefix = "err: ";
+        break;
+    case G_LOG_LEVEL_CRITICAL:
+        syslog_priority = LOG_ERR;
+        out_stderr = TRUE;
+        prefix = "crit:";
+        break;
+    case G_LOG_LEVEL_WARNING:
+        syslog_priority = LOG_WARNING;
+        out_stderr = TRUE;
+        prefix = "warn:";
+        break;
+    case G_LOG_LEVEL_MESSAGE:
+        syslog_priority = LOG_NOTICE;
+        prefix = "msg: ";
+        break;
+    case G_LOG_LEVEL_INFO:
+        syslog_priority = LOG_INFO;
+        prefix = "info:";
+        break;
+    case G_LOG_LEVEL_DEBUG:
+        syslog_priority = LOG_DEBUG;
+        prefix = "dbg: ";
+        break;
+    default:
+        /* WTF; ignore */
+        return;
+    }
+
+    if (syslog_flag)
+        syslog (syslog_priority, "%s", message);
+    else if (out_stderr)
+        g_printerr ("%s %s\n", prefix, message);
+    else
+        g_print ("%s %s\n", prefix, message);
+}
+
+static void
+teardown_log (void)
+{
+    if (syslog_flag)
+        closelog ();
+}
+
+static void
+setup_log (void)
+{
+    if (syslog_flag)
+        openlog ("g-simple-rt", LOG_CONS | LOG_PID | LOG_PERROR, LOG_DAEMON);
+
+    g_log_set_handler (NULL, G_LOG_LEVEL_MASK, log_handler, NULL);
+}
+
+/******************************************************************************/
+
 int main (int argc, char **argv)
 {
     static const gchar *subsystems[] = { "usb/usb_device", NULL };
@@ -1036,6 +1114,9 @@ int main (int argc, char **argv)
 
     /* Process input options */
     process_input_args (argc, argv, &context);
+
+    /* Setup logging */
+    setup_log ();
 
     /* Tethering action */
     if (context.action == ACTION_TETHERING) {
@@ -1070,6 +1151,8 @@ int main (int argc, char **argv)
     g_hash_table_unref (context.subnets);
     g_object_unref (context.udev);
     libusb_exit (context.usb_context);
+
+    teardown_log ();
 
     return EXIT_SUCCESS;
 }

@@ -4,7 +4,7 @@
 #   -v, --vid=[VID]             Device USB vendor ID (mandatory)
 #   -p, --pid=[PID]             Device USB product ID (optional)
 #   -i, --interface=[IFACE]     Network interface (mandatory)
+#   -s, --syslog                Write logs to syslog instead of standard output
 #
 
-DAEMON_ARGS="--vid=04e8 --interface=localhost"
-
+DAEMON_ARGS="--vid=04e8 --interface=localhost --syslog"
