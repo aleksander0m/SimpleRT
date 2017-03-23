@@ -1,3 +1,9 @@
+g-simple-rt (0.0.2-2) trusty; urgency=low
+
+  * Add missing /sbin and /usr/sbin in PATH for start-stop-daemon
+
+ -- Aleksander Morgado <aleksander@aleksander.es>  Thu, 23 Mar 2017 13:50:33 +0100
+
 g-simple-rt (0.0.2-1) trusty; urgency=low
 
   * New release.

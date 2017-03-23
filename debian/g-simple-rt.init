@@ -10,7 +10,7 @@
 # Description:       Seat Control daemon
 ### END INIT INFO
 
-PATH=/bin:/usr/bin
+PATH=/bin:/usr/bin:/sbin/:/usr/sbin
 NAME=g-simple-rt
 DAEMON=/usr/bin/$NAME
 PIDFILE=/var/run/$NAME.pid
@@ -52,4 +52,3 @@ case "$1" in
 esac
 
 exit 0
-
