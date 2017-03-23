@@ -17,6 +17,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #params from simple-rt-cli
+
+[ $# -ge 6 ] || {
+    echo "error: missing arguments"
+    exit 1
+}
+
 PLATFORM=$1
 TUN_DEV=$2
 LOCAL_INTERFACE=$3
@@ -24,15 +30,50 @@ TUNNEL_NET=$4
 TUNNEL_CIDR=$5
 HOST_ADDR=$6
 
-echo configuring $TUN_DEV
+LOGGER="$(which logger)"
+[ -n "${LOGGER}" ] || exit 1
 
-if [ "$PLATFORM" = "linux" ]; then
-    ifconfig $TUN_DEV $HOST_ADDR/$TUNNEL_CIDR up
-    sysctl -w net.ipv4.ip_forward=1
-    iptables -I FORWARD -j ACCEPT
-    iptables -t nat -I POSTROUTING -s $TUNNEL_NET/$TUNNEL_CIDR -o $LOCAL_INTERFACE -j MASQUERADE
-else
-    exit 1
-fi
+IPTABLES="$(which iptables)"
+[ -n "${IPTABLES}" ] || exit 1
+
+IPROUTE2="$(which ip)"
+[ -n "${IPROUTE2}" ] || exit 1
+
+SYSCTL="$(which sysctl)"
+[ -n "${SYSCTL}" ] || exit 1
+
+FLOCK="$(which flock)"
+[ -n "${FLOCK}" ] || exit 1
+
+# Only allow Linux platform here
+[ "$PLATFORM" = "linux" ] || exit 2
+
+# Get exclusive lock so that we don't collide with other threads trying to set
+# this up at the same time
+(
+    ${FLOCK} -x --timeout=30 200 || exit 3
+
+    ${LOGGER} -s -t "g-simple-rt" "configured ${TUN_DEV} as ${HOST_ADDR}/${TUNNEL_CIDR}"
+    ${IPROUTE2} addr add $HOST_ADDR/$TUNNEL_CIDR dev $TUN_DEV
+    ${IPROUTE2} link set dev $TUN_DEV up
+
+    # Enable IPv4 forwarding if not already done before
+    if [ $(${SYSCTL} -n net.ipv4.ip_forward) -eq 0 ]; then
+        ${LOGGER} -s -t "g-simple-rt" "enabled IPv4 forwarding"
+        ${SYSCTL} -w net.ipv4.ip_forward=1
+    fi
+
+    # Don't create multiple rules of the same type (e.g. when tethering more
+    # than one device)
+    ${IPTABLES} -w -C FORWARD -j ACCEPT > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        ${LOGGER} -s -t "g-simple-rt" "enabled forwarding in iptables rules"
+        ${IPTABLES} -w -I FORWARD -j ACCEPT
+    fi
+
+    ${LOGGER} -s -t "g-simple-rt" "enabled forwarding ${TUNNEL_NET}/${TUNNEL_CIDR} --> ${LOCAL_INTERFACE}"
+    ${IPTABLES} -w -t nat -I POSTROUTING -s ${TUNNEL_NET}/${TUNNEL_CIDR} -o $LOCAL_INTERFACE -j MASQUERADE
+
+) 200>/var/lock/g-simple-rt-iface-up
 
 exit 0
