@@ -220,7 +220,7 @@ tun_thread_func (Device *device)
         if ((status = select (device->tun_fd + 1, &rfds, NULL, NULL, &tv)) < 0) {
             if (errno == EINTR)
                 continue;
-            g_warning ("waiting to write: %s", g_strerror (errno));
+            g_warning ("[%03o,%03o] waiting to write: %s", device->busnum, device->devnum, g_strerror (errno));
             break;
         }
 
@@ -237,14 +237,14 @@ tun_thread_func (Device *device)
                                              ACC_TIMEOUT)) < 0) {
                 if (ret == LIBUSB_ERROR_TIMEOUT)
                     continue;
-                g_warning ("bulk transfer failed: %s", libusb_strerror (ret));
+                g_warning ("[%03o,%03o] bulk transfer failed: %s", device->busnum, device->devnum, libusb_strerror (ret));
                 break;
             }
             continue;
         }
 
         if (nread < 0) {
-            g_warning ("couldn't read from TUN device: %s", g_strerror (errno));
+            g_warning ("[%03o,%03o] couldn't read from TUN device: %s", device->busnum, device->devnum, g_strerror (errno));
             break;
         }
 
@@ -284,12 +284,12 @@ acc_thread_func (Device *device)
             if (ret == LIBUSB_ERROR_TIMEOUT)
                 continue;
 
-            g_warning ("bulk transfer error: %s", libusb_strerror (ret));
+            g_warning ("[%03o,%03o] bulk transfer error: %s", device->busnum, device->devnum, libusb_strerror (ret));
             break;
         }
 
         if (write (device->tun_fd, acc_buf, transferred) < 0) {
-            g_warning ("couldn't write to TUN device: %s", g_strerror (errno));
+            g_warning ("[%03o,%03o] couldn't write to TUN device: %s", device->busnum, device->devnum, g_strerror (errno));
             break;
         }
     }
@@ -317,7 +317,7 @@ conn_thread_func (Device *device)
     device->timeout_id = 0;
 
     if ((device->tun_fd = open (clonedev, O_RDWR)) < 0 ) {
-        g_critical ("couldn't open TUN clone device: %s", g_strerror (errno));
+        g_critical ("[%03o,%03o] couldn't open TUN clone device: %s", device->busnum, device->devnum, g_strerror (errno));
         goto out;
     }
 
@@ -327,7 +327,7 @@ conn_thread_func (Device *device)
     if (ioctl (device->tun_fd, TUNSETIFF, (void *) &ifr) < 0) {
         close (device->tun_fd);
         device->tun_fd = 0;
-        g_critical ("couldn't create TUN device: %s", g_strerror (errno));
+        g_critical ("[%03o,%03o] couldn't create TUN device: %s", device->busnum, device->devnum, g_strerror (errno));
         goto out;
     }
 
@@ -357,26 +357,30 @@ conn_thread_func (Device *device)
                        NULL, /* standard_error */
                        &ret,
                        &error)) {
-        g_critical ("couldn't run " IFACE_UP_SCRIPT " for %s: %s", device->tun_name, error->message);
+        g_critical ("[%03o,%03o] couldn't run " IFACE_UP_SCRIPT " for %s: %s",
+                    device->busnum, device->devnum, device->tun_name, error->message);
         g_clear_error (&error);
         goto out;
     }
 
     if (!g_spawn_check_exit_status (ret, &error)) {
-        g_critical (IFACE_UP_SCRIPT " returned error for %s: %s", device->tun_name, error->message);
+        g_critical ("[%03o,%03o] " IFACE_UP_SCRIPT " returned error for %s: %s",
+                    device->busnum, device->devnum, device->tun_name, error->message);
         g_clear_error (&error);
         goto out;
     }
 
     /* Trying to open supplied device */
     if ((ret = libusb_open (device->usb_device, &device->usb_handle)) < 0) {
-        g_critical ("unable to open device: %s", libusb_strerror (ret));
+        g_critical ("[%03o,%03o] unable to open device: %s",
+                    device->busnum, device->devnum, libusb_strerror (ret));
         goto out;
     }
 
     /* Claiming first (accessory) interface from the opened device */
     if ((ret = libusb_claim_interface (device->usb_handle, 0)) < 0) {
-        g_critical ("couldn't claim interface: %s", libusb_strerror (ret));
+        g_critical ("[%03o,%03o] couldn't claim interface: %s",
+                    device->busnum, device->devnum, libusb_strerror (ret));
         goto out;
     }
 
@@ -537,7 +541,7 @@ device_probe_aoa (Device *device)
 
     /* Trying to open supplied device */
     if ((ret = libusb_open (device->usb_device, &device->usb_handle)) < 0) {
-        g_critical ("unable to open device: %s", libusb_strerror (ret));
+        g_critical ("[%03o,%03o] unable to open device: %s", device->busnum, device->devnum, libusb_strerror (ret));
         return FALSE;
     }
 
@@ -797,14 +801,14 @@ reset_device (guint busnum, guint devnum)
 	fd = open (path, O_WRONLY);
 	if (fd > -1) {
 		if (ioctl (fd, USBDEVFS_RESET, 0) < 0 && errno != ENODEV)
-			g_critical ("failed reseting device [%03u,%03u]: %s", busnum, devnum, g_strerror (errno));
+			g_critical ("[%03u,%03u] failed reseting device: %s", busnum, devnum, g_strerror (errno));
 		else {
             reseted = TRUE;
-			g_message ("reset device [%03u,%03u]: done", busnum, devnum);
+			g_message ("[%03u,%03u] reset device: done", busnum, devnum);
         }
 		close (fd);
 	} else
-        g_critical ("cannot open %s: %s", path, g_strerror (errno));
+        g_critical ("[%03u,%03u] cannot open %s: %s", busnum, devnum, path, g_strerror (errno));
 
     g_free (path);
 
