@@ -238,7 +238,6 @@ tun_thread_func (Device *device)
                 if (ret == LIBUSB_ERROR_TIMEOUT)
                     continue;
                 g_warning ("[%03o,%03o] bulk transfer failed: %s", device->busnum, device->devnum, libusb_strerror (ret));
-                break;
             }
             continue;
         }
@@ -285,7 +284,7 @@ acc_thread_func (Device *device)
                 continue;
 
             g_warning ("[%03o,%03o] bulk transfer error: %s", device->busnum, device->devnum, libusb_strerror (ret));
-            break;
+            continue;
         }
 
         if (write (device->tun_fd, acc_buf, transferred) < 0) {
